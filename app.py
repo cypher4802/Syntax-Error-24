@@ -5,7 +5,6 @@ import pyautogui
 import mediapipe as mp
 import numpy as np
 
-# Set up MediaPipe pose model and drawing utilities
 mp_drawing = mp.solutions.drawing_utils
 mp_pose = mp.solutions.pose
 
@@ -18,7 +17,6 @@ class App:
 
     def run(self):
         try:
-            # Initialize video capture
             cap = cv2.VideoCapture(0)
 
             # Curl counter variables for both arms
@@ -26,6 +24,16 @@ class App:
             right_counter = 0
             left_stage = None
             right_stage = None
+            
+            # Kick counter variables
+            left_kick_counter = 0
+            right_kick_counter = 0
+
+            # Initialize heights for knee tracking
+            initial_left_knee_height = None
+            initial_right_knee_height = None
+            kick_threshold = 0.25  # Height change threshold for detecting kicks
+            kick_type = ""  # Variable to store the type of kick
 
             with mp_pose.Pose(min_detection_confidence=0.5, min_tracking_confidence=0.5) as pose:
                 if not cap.isOpened():
@@ -40,25 +48,21 @@ class App:
                 game_stop = False
                 prev_vertical_status = None
 
-                # Loop for video feed
                 while True:
                     ret, frame = cap.read()
                     if not ret:
                         break
 
-                    # Flip and convert frame to RGB for processing
                     frame = cv2.flip(frame, 1)
                     frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
                     frame_height, frame_width, _ = frame.shape
 
-                    # Process the frame with MediaPipe pose model
                     results = pose.process(frame_rgb)
 
-                    # Helper function to calculate the angle between joints
                     def calculate_angle(a, b, c):
-                        a = np.array(a)  # First point
-                        b = np.array(b)  # Second point (vertex)
-                        c = np.array(c)  # Third point
+                        a = np.array(a)
+                        b = np.array(b)
+                        c = np.array(c)
                         radians = np.arctan2(c[1] - b[1], c[0] - b[0]) - np.arctan2(a[1] - b[1], a[0] - b[0])
                         angle = np.abs(radians * 180.0 / np.pi)
                         if angle > 180.0:
@@ -66,7 +70,6 @@ class App:
                         return angle
 
                     if results.pose_landmarks:
-                        # Extract landmarks for left and right arms
                         landmarks = results.pose_landmarks.landmark
                         left_shoulder = [landmarks[mp_pose.PoseLandmark.LEFT_SHOULDER.value].x,
                                          landmarks[mp_pose.PoseLandmark.LEFT_SHOULDER.value].y]
@@ -81,21 +84,46 @@ class App:
                                        landmarks[mp_pose.PoseLandmark.RIGHT_ELBOW.value].y]
                         right_wrist = [landmarks[mp_pose.PoseLandmark.RIGHT_WRIST.value].x,
                                        landmarks[mp_pose.PoseLandmark.RIGHT_WRIST.value].y]
+                        left_knee = landmarks[mp_pose.PoseLandmark.LEFT_KNEE.value]
+                        right_knee = landmarks[mp_pose.PoseLandmark.RIGHT_KNEE.value]
+                        left_knee_height = left_knee.y
+                        right_knee_height = right_knee.y
 
-                        # Calculate angles for left and right arms
+                        if initial_left_knee_height is None:
+                            initial_left_knee_height = left_knee_height
+                        if initial_right_knee_height is None:
+                            initial_right_knee_height = right_knee_height
+                        
+                        left_height_change = initial_left_knee_height - left_knee_height
+                        right_height_change = initial_right_knee_height - right_knee_height
+
+                        # Detect left kick
+                        if left_height_change > 0.2:
+                            if kick_type != "Left Kick":
+                                left_kick_counter += 1
+                            kick_type = "Left Kick"
+
+                        # Detect right kick
+                        elif right_height_change > kick_threshold:
+                            if kick_type != "Right Kick":
+                                right_kick_counter += 1
+                            kick_type = "Right Kick"
+
+                        else:
+                            kick_type = ""  # Reset if no kick detected
+                        
                         left_angle = calculate_angle(left_shoulder, left_elbow, left_wrist)
                         right_angle = calculate_angle(right_shoulder, right_elbow, right_wrist)
 
-                        # Warning for starting the game
                         if not self.start_game:
                             if left_angle > 25 or right_angle > 25:
                                 warning_message = "Both elbows should be below 25 degrees to start!"
                                 cv2.putText(frame, warning_message, (frame_width // 2 - 250, frame_height // 2),
-                                            cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)  # Red color for warning
+                                            cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
                             else:
-                                self.start_game = True  # Start the game if both angles are below 25
+                                self.start_game = True
                                 cv2.putText(frame, "Game Started! Keep going!", (frame_width // 2 - 200, frame_height // 2),
-                                            cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)  # Green color for confirmation
+                                            cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
 
                         # Curl logic for left arm
                         if left_angle > 70:
@@ -107,17 +135,13 @@ class App:
                         # Curl logic for right arm
                         if right_angle > 70:
                             right_stage = "down"
-                        if right_angle < 25 and right_stage == "down":
+                        if right_angle < 30 and right_stage == "down":
                             right_stage = "up"
                             right_counter += 1
 
-                        # Calculate the distance between left and right shoulders
                         shoulder_distance = np.linalg.norm(np.array(left_shoulder) - np.array(right_shoulder))
-
-                        # Calculate the scaling factor to compare with the baseline shoulder distance
                         scale_factor = shoulder_distance / BASELINE_SHOULDER_DISTANCE
 
-                        # Provide feedback if the user is too close or too far from the camera
                         if scale_factor > 1.1:
                             distance_feedback = "Too Close"
                         elif scale_factor < 1:
@@ -125,31 +149,24 @@ class App:
                         else:
                             distance_feedback = "Good Distance"
 
-                        # Display the distance value at the center-bottom
                         distance_value_text = f"Distance: {shoulder_distance:.2f}m"
                         cv2.putText(frame, distance_value_text, (frame_width // 2 - 150, frame_height - 30),
-                                    cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)  # White text
+                                    cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
 
-                        # Draw the distance feedback on the bottom-left corner
                         cv2.putText(frame, distance_feedback, (10, frame_height - 30),
-                                    cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)  # Red color for warnings
+                                    cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
 
-                        # Draw the lines for jump and sit detection
-                        two_thirds_height = int(2 * frame_height / 3) - 30  # Raise the line for jumping
-                        two_fifths_height = int(2 * frame_height / 5) - 30   # Raise the line for sitting
-                        cv2.line(frame, (0, two_thirds_height), (frame_width, two_thirds_height), (0, 255, 0), 2)  # Jump line
-                        cv2.line(frame, (0, two_fifths_height), (frame_width, two_fifths_height), (255, 0, 0), 2)  # Sit line
-
-                        # Detect vertical movement based on nose position
+                        # Detect vertical movement
                         y_nose = landmarks[mp_pose.PoseLandmark.NOSE.value].y * frame_height
-                        if y_nose < two_fifths_height:
-                            vertical_status = "Jump"
-                        elif y_nose > two_thirds_height:
+
+                        # Update thresholds for Jump and Sit detection
+                        if y_nose < (frame_height / 3):  # Upper half of the frame
                             vertical_status = "Sit"
+                        elif y_nose > (3 * frame_height / 5):  # Lower quarter of the frame
+                            vertical_status = "Jump"
                         else:
                             vertical_status = "Stand"
 
-                        # Show the detected movement status
                         cv2.putText(frame, vertical_status, (frame_width - 150, frame_height - 10),
                                     cv2.FONT_HERSHEY_PLAIN, 2, (255, 255, 255), 3)
 
@@ -165,27 +182,39 @@ class App:
                                     pyautogui.press("down")
                             prev_vertical_status = vertical_status
 
+                        # Draw horizontal lines for Jump and Sit thresholds
+                        cv2.line(frame, (0, frame_height // 2), (frame_width, frame_height // 2), (0, 0, 255), 2)  # Line for Sit
+                        cv2.line(frame, (0, 3 * frame_height // 4), (frame_width, 3 * frame_height // 4), (0, 255, 0), 2)  # Line for Jump
+
                         # Draw left and right rep counters
                         cv2.rectangle(frame, (0, 0), (225, 73), (245, 117, 16), -1)
                         cv2.putText(frame, "LEFT REPS", (15, 12), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 0), 1)
                         cv2.putText(frame, str(left_counter), (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 2, (255, 255, 255), 2)
 
                         cv2.rectangle(frame, (frame_width - 225, 0), (frame_width, 73), (245, 117, 16), -1)
-                        cv2.putText(frame, "RIGHT REPS", (frame_width - 210, 12), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 0), 1)
-                        cv2.putText(frame, str(right_counter), (frame_width - 210, 60), cv2.FONT_HERSHEY_SIMPLEX, 2, (255, 255, 255), 2)
+                        cv2.putText(frame, "RIGHT REPS", (frame_width - 215, 12), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 0), 1)
+                        cv2.putText(frame, str(right_counter), (frame_width - 215, 60), cv2.FONT_HERSHEY_SIMPLEX, 2, (255, 255, 255), 2)
 
-                    # Display the processed frame
-                    cv2.imshow("Exercise Detection", frame)
+                        # Draw kick counters below the rep counters
+                        cv2.rectangle(frame, (0, 73), (225, 100), (245, 117, 16), -1)  # Adjust height as needed
+                        cv2.putText(frame, "LEFT KICKS", (15, 90), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 0), 1)
+                        cv2.putText(frame, str(left_kick_counter), (10, 130), cv2.FONT_HERSHEY_SIMPLEX, 1.5, (255, 255, 255), 2)
 
-                    # Break loop on 'q' key press
-                    if cv2.waitKey(10) & 0xFF == ord('q'):
+                        cv2.rectangle(frame, (frame_width - 225, 73), (frame_width, 100), (245, 117, 16), -1)  # Adjust height as needed
+                        cv2.putText(frame, "RIGHT KICKS", (frame_width - 215, 90), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 0), 1)
+                        cv2.putText(frame, str(right_kick_counter), (frame_width - 215, 130), cv2.FONT_HERSHEY_SIMPLEX, 1.5, (255, 255, 255), 2)
+
+                        mp_drawing.draw_landmarks(frame, results.pose_landmarks, mp_pose.POSE_CONNECTIONS)
+
+                    cv2.imshow("Push Up Counter", frame)
+                    if cv2.waitKey(10) & 0xFF == 27:  # Press 'ESC' to quit
                         break
 
-                # Release video capture
-                cap.release()
-                cv2.destroyAllWindows()
+            cap.release()
+            cv2.destroyAllWindows()
         except Exception as e:
-            print(f"Error: {e}")
+            print(f"Error: {str(e)}")
+            sys.exit(1)
 
 if __name__ == "__main__":
     app = App()
