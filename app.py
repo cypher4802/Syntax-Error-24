@@ -4,6 +4,8 @@ import cv2
 import pyautogui
 import mediapipe as mp
 import numpy as np
+import math
+import logging
 
 mp_drawing = mp.solutions.drawing_utils
 mp_pose = mp.solutions.pose
@@ -11,9 +13,14 @@ mp_pose = mp.solutions.pose
 # Baseline shoulder distance at 1 meter distance from the camera (calibrated value)
 BASELINE_SHOULDER_DISTANCE = 0.25  # This value needs to be calibrated based on actual camera setup
 
+class CustomException(Exception):
+    pass
+
 class App:
     def __init__(self):
         self.start_game = False
+        self.lower_bound_line_threshold = 30  # Adjust as needed
+        self.upper_bound_line_threshold = 30  # Adjust as needed
 
     def run(self):
         try:
@@ -98,7 +105,7 @@ class App:
                         right_height_change = initial_right_knee_height - right_knee_height
 
                         # Detect left kick
-                        if left_height_change > 0.2:
+                        if left_height_change > kick_threshold:
                             if kick_type != "Left Kick":
                                 left_kick_counter += 1
                             kick_type = "Left Kick"
@@ -149,72 +156,68 @@ class App:
                         else:
                             distance_feedback = "Good Distance"
 
-                        distance_value_text = f"Distance: {shoulder_distance:.2f}m"
-                        cv2.putText(frame, distance_value_text, (frame_width // 2 - 150, frame_height - 30),
-                                    cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
-
-                        cv2.putText(frame, distance_feedback, (10, frame_height - 30),
-                                    cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
-
-                        # Detect vertical movement
-                        y_nose = landmarks[mp_pose.PoseLandmark.NOSE.value].y * frame_height
+                        # Show distance feedback at the top center of the frame
+                        distance_feedback_text = f"Distance: {distance_feedback}"
+                        text_size_feedback = cv2.getTextSize(distance_feedback_text, cv2.FONT_HERSHEY_SIMPLEX, 1, 2)[0]
+                        text_x_feedback = (frame_width - text_size_feedback[0]) // 2
+                        cv2.putText(frame, distance_feedback_text, (text_x_feedback, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
 
                         # Update thresholds for Jump and Sit detection
-                        if y_nose < (frame_height / 3):  # Upper half of the frame
-                            vertical_status = "Sit"
-                        elif y_nose > (3 * frame_height / 5):  # Lower quarter of the frame
+                        y_nose = landmarks[mp_pose.PoseLandmark.NOSE.value].y * frame_height
+
+                        # Detect vertical movement
+                        if y_nose < (frame_height / 3):  # Upper third of the frame
                             vertical_status = "Jump"
+                        elif y_nose > (2 * frame_height / 3):  # Lower third of the frame
+                            vertical_status = "Sit"
                         else:
                             vertical_status = "Stand"
 
-                        cv2.putText(frame, vertical_status, (frame_width - 150, frame_height - 10),
-                                    cv2.FONT_HERSHEY_PLAIN, 2, (255, 255, 255), 3)
+                        # Draw the vertical status at the bottom center of the frame
+                        text_size = cv2.getTextSize(vertical_status, cv2.FONT_HERSHEY_PLAIN, 2, 3)[0]
+                        text_x = (frame_width - text_size[0]) // 2
+                        text_y = frame_height - 10
+                        cv2.putText(frame, vertical_status, (text_x, text_y), cv2.FONT_HERSHEY_PLAIN, 2, (255, 255, 255), 3)
 
-                        # Trigger actions based on movement status change
-                        if vertical_status != prev_vertical_status:
-                            if vertical_status == "Jump":
-                                print("Move Up")
-                                if self.start_game and not game_stop:
-                                    pyautogui.press("up")
-                            elif vertical_status == "Sit":
-                                print("Move Down")
-                                if self.start_game and not game_stop:
-                                    pyautogui.press("down")
-                            prev_vertical_status = vertical_status
-
-                        # Draw horizontal lines for Jump and Sit thresholds
-                        cv2.line(frame, (0, frame_height // 2), (frame_width, frame_height // 2), (0, 0, 255), 2)  # Line for Sit
-                        cv2.line(frame, (0, 3 * frame_height // 4), (frame_width, 3 * frame_height // 4), (0, 255, 0), 2)  # Line for Jump
-
-                        # Draw left and right rep counters
+                        # Draw rep counters
                         cv2.rectangle(frame, (0, 0), (225, 73), (245, 117, 16), -1)
                         cv2.putText(frame, "LEFT REPS", (15, 12), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 0), 1)
                         cv2.putText(frame, str(left_counter), (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 2, (255, 255, 255), 2)
 
                         cv2.rectangle(frame, (frame_width - 225, 0), (frame_width, 73), (245, 117, 16), -1)
-                        cv2.putText(frame, "RIGHT REPS", (frame_width - 215, 12), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 0), 1)
-                        cv2.putText(frame, str(right_counter), (frame_width - 215, 60), cv2.FONT_HERSHEY_SIMPLEX, 2, (255, 255, 255), 2)
+                        cv2.putText(frame, "RIGHT REPS", (frame_width - 210, 12), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 0), 1)
+                        cv2.putText(frame, str(right_counter), (frame_width - 220, 60), cv2.FONT_HERSHEY_SIMPLEX, 2, (255, 255, 255), 2)
 
-                        # Draw kick counters below the rep counters
-                        cv2.rectangle(frame, (0, 73), (225, 100), (245, 117, 16), -1)  # Adjust height as needed
-                        cv2.putText(frame, "LEFT KICKS", (15, 90), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 0), 1)
-                        cv2.putText(frame, str(left_kick_counter), (10, 130), cv2.FONT_HERSHEY_SIMPLEX, 1.5, (255, 255, 255), 2)
+                        # Draw kick counters
+                        cv2.rectangle(frame, (0, frame_height - 73), (225, frame_height), (245, 117, 16), -1)
+                        cv2.putText(frame, "LEFT KICKS", (15, frame_height - 62), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 0), 1)
+                        cv2.putText(frame, str(left_kick_counter), (10, frame_height - 10), cv2.FONT_HERSHEY_SIMPLEX, 2, (255, 255, 255), 2)
 
-                        cv2.rectangle(frame, (frame_width - 225, 73), (frame_width, 100), (245, 117, 16), -1)  # Adjust height as needed
-                        cv2.putText(frame, "RIGHT KICKS", (frame_width - 215, 90), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 0), 1)
-                        cv2.putText(frame, str(right_kick_counter), (frame_width - 215, 130), cv2.FONT_HERSHEY_SIMPLEX, 1.5, (255, 255, 255), 2)
+                        cv2.rectangle(frame, (frame_width - 225, frame_height - 73), (frame_width, frame_height), (245, 117, 16), -1)
+                        cv2.putText(frame, "RIGHT KICKS", (frame_width - 210, frame_height - 62), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 0), 1)
+                        cv2.putText(frame, str(right_kick_counter), (frame_width - 220, frame_height - 10), cv2.FONT_HERSHEY_SIMPLEX, 2, (255, 255, 255), 2)
 
-                        mp_drawing.draw_landmarks(frame, results.pose_landmarks, mp_pose.POSE_CONNECTIONS)
+                    # Show the frame
+                    cv2.imshow('MediaPipe Pose', frame)
 
-                    cv2.imshow("Push Up Counter", frame)
-                    if cv2.waitKey(10) & 0xFF == 27:  # Press 'ESC' to quit
+                    # Exit on 'q' key
+                    if cv2.waitKey(10) & 0xFF == ord('q'):
                         break
 
-            cap.release()
-            cv2.destroyAllWindows()
+                cap.release()
+                cv2.destroyAllWindows()
+
+        except CustomException as e:
+            logging.error("Custom exception occurred: %s", e)
+            print("An error occurred in the application.")
         except Exception as e:
-            print(f"Error: {str(e)}")
-            sys.exit(1)
+            logging.error("An unexpected error occurred: %s", e)
+            print("An unexpected error occurred.")
+
+    def draw_horizontal_and_vertical_lines(self, frame, y_position):
+        frame_height, frame_width, _ = frame.shape
+        cv2.line(frame, (0, y_position), (frame_width, y_position), (255, 0, 0), 2)  # Horizontal line
+        cv2.line(frame, (frame_width // 2, 0), (frame_width // 2, frame_height), (255, 0, 0), 2)  # Vertical line
 
 if __name__ == "__main__":
     app = App()
