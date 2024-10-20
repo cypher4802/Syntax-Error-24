@@ -11,11 +11,11 @@ Remember the X men character which can control all the things by his bare hands 
   
   All this starts with getting to the good distance region as will be there on the computer camera popup then you have to get to the recommended position then the game will start and you can get the functionality you want.
   ![Pose_detection](https://github.com/cypher4802/Syntax-Error-24/blob/main/Images/Screenshot%202024-10-20%20104158.png)
-  ![Pose_detection]([https://github.com/cypher4802/Syntax-Error-24/blob/main/Images/Screenshot%202024-10-20%20104158.png](https://github.com/cypher4802/Syntax-Error-24/blob/main/Images/Screenshot%202024-10-20%20104221.png))
+  ![Pose_detection](https://github.com/cypher4802/Syntax-Error-24/blob/main/Images/Screenshot%202024-10-20%20104221.png)
 
 # Recording the actions
 When you want to record the moves then you can just press the key R and then the commands will get recorded which will be replayed when you want after a buffer time.
-![Replay_actions]([https://github.com/cypher4802/Syntax-Error-24/blob/main/Images/Screenshot%202024-10-20%20104158.png](https://github.com/cypher4802/Syntax-Error-24/blob/main/Images/Screenshot%202024-10-20%20104212.png))
+![Replay_actions](https://github.com/cypher4802/Syntax-Error-24/blob/main/Images/Screenshot%202024-10-20%20104212.png)
 
 # MultiPurpose API
 The api that we have produced here is not only used in our game but according to the commands in the keyboard for other games can work for them as well so we have in a way created a universal API.
