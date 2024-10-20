@@ -22,7 +22,11 @@ The api that we have produced here is not only used in our game but according to
 
 
 # Future goals
-We will implement the server using websocket and then the rendering and efficiency of the video will be fast.
+Our next steps involve significantly advancing the server architecture by integrating WebSockets for real-time communication between various components of the system. This will enable smoother, low-latency interactions between the client and server, crucial for the gameplay experience.
+
+We also plan to implement a shared memory system to streamline data transfer between the AI model and the game engine. This integration will not only make the replay feature more efficient but also allow the AI to analyze gameplay in real time, providing actionable insights into player performance, decision-making, and strategies.
+
+To elevate the user experience, we aim to incorporate AI-driven animations, making character movements and in-game responses more dynamic and lifelike. By leveraging AI for enhanced animations and smarter replays, players can enjoy a more immersive and visually engaging gaming experience. Additionally, these improvements will serve as powerful tools for gameplay analysis, debugging, and creating advanced tutorials.
 
 ## Thank You
 ## 404 Not Found
