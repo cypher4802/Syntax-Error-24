@@ -24,9 +24,9 @@ The api that we have produced here is not only used in our game but according to
 # Future goals
 We will implement the server using websocket and then the rendering and efficiency of the video will be fast.
 
-Thank You
-404 Not Found
-Tanmay Sharma 
-Vishesh Bhardwaj
+## Thank You
+## 404 Not Found
+## Tanmay Sharma 
+## Vishesh Bhardwaj
 
   
