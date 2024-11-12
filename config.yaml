@@ -1,0 +1,5 @@
+"min_detection_confidence": 0.5
+"min_tracking_confidence": 0.5
+"lower_bound_line_threshold": 80
+"upper_bound_line_threshold": 70
+"distance_threshold_hands_joined": 200
